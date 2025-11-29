@@ -1,0 +1,25 @@
+{
+  "name": "telegram-products",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon --exec ts-node src/index.ts"
+  },
+  "dependencies": {
+    "@grammyjs/conversations": "^2.1.0",
+    "@grammyjs/hydrate": "^1.6.0",
+    "@grammyjs/storage-free": "^2.5.1",
+    "axios": "^1.13.2",
+    "dotenv": "^17.2.3",
+    "grammy": "^1.38.3",
+    "mongoose": "^8.19.1"
+  },
+  "devDependencies": {
+    "@types/axios": "^0.9.36",
+    "@types/node": "^24.8.1"
+  }
+}
