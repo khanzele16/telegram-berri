@@ -30,11 +30,10 @@ import { checkout } from "./conversations/checkout";
 import { viewCart } from "./conversations/viewCart";
 import { freeStorage } from "@grammyjs/storage-free";
 import { initialSessionData } from "./shared/session";
-import { initializeCategories } from "./database/seed";
 import { addProduct } from "./conversations/addProduct";
 import { viewMyOrders } from "./conversations/viewMyOrders";
 import { viewMyProducts } from "./conversations/viewProducts";
-import { MyContext, MyConversationContext } from "./types/bot";
+import { MyContext } from "./types/bot";
 import { callbackQueryHandler } from "./handlers/callbackQuery";
 import { approveOrderConversation } from "./conversations/approveOrder";
 import { conversations, createConversation } from "@grammyjs/conversations";
@@ -80,7 +79,6 @@ mongoose
   .connect(process.env.MONGO_URL as string, { dbName: "berriDB" })
   .then(async () => {
     console.log("✅ База данных подключена успешно");
-    await initializeCategories();
   })
   .catch((err) => {
     console.error("❌ Ошибка подключения к базе данных:", err);
