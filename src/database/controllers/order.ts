@@ -21,7 +21,6 @@ export async function approveOrder(orderId: string, adminId: number) {
     throw new Error("Заказ не оплачен");
   }
 
-  // Группируем товары по продавцам
   const sellerPayouts = new Map<string, { amount: number; items: any[] }>();
   
   for (const item of order.items) {
@@ -32,7 +31,7 @@ export async function approveOrder(orderId: string, adminId: number) {
     
     const sellerId = item.sellerId.toString();
     const itemTotal = item.price * item.quantity;
-    const sellerAmount = Math.round(itemTotal * 0.9); // 90% продавцу
+    const sellerAmount = Math.round(itemTotal * 0.9);
 
     if (!sellerPayouts.has(sellerId)) {
       sellerPayouts.set(sellerId, { amount: 0, items: [] });
@@ -43,7 +42,6 @@ export async function approveOrder(orderId: string, adminId: number) {
     payout.items.push(item);
   }
 
-  // Отправляем выплаты каждому продавцу
   const payoutResults: any[] = [];
 
   for (const [sellerId, { amount, items }] of sellerPayouts) {
@@ -92,14 +90,11 @@ export async function approveOrder(orderId: string, adminId: number) {
       });
     }
   }
-
-  // Обновляем заказ
   order.adminApproved = true;
   order.approvedAt = new Date();
   order.approvedBy = adminId as any;
   order.payoutStatus = "succeeded";
   
-  // Сохраняем ID первой выплаты (если их несколько)
   if (payoutResults.length > 0 && payoutResults[0].payoutId) {
     order.payoutId = payoutResults[0].payoutId;
   }

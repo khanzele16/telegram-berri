@@ -1,13 +1,5 @@
 import dotenv from "dotenv";
 import mongoose from "mongoose";
-import { commands } from "./config/commands";
-import { freeStorage } from "@grammyjs/storage-free";
-import { initialSessionData } from "./shared/session";
-import { conversations, createConversation } from "@grammyjs/conversations";
-import { MyContext, MyConversationContext } from "./types/bot";
-import { Bot, GrammyError, HttpError, NextFunction, session } from "grammy";
-import { ISessionData } from "./types/plugins";
-import { callbackQueryHandler } from "./handlers/callbackQuery";
 import {
   handleSwitchToBuyer,
   handleSwitchToSeller,
@@ -22,24 +14,44 @@ import {
   handleAddProduct,
   handleSellerOrders,
   handleStatistics,
-  handleSettings
+  handleSettings,
 } from "./handlers/text";
-import { initializeCategories } from "./database/seed";
 import {
   buyerRegistration,
   sellerRegistration,
   bothRegistration,
-  searchProducts
+  searchProducts,
 } from "./conversations/registration";
-import { addProduct } from "./conversations/addProduct";
-import { viewMyProducts } from "./conversations/viewProducts";
-import { productFeed } from "./conversations/feed";
+import { commands } from "./config/commands";
+import { ISessionData } from "./types/plugins";
 import { catalog } from "./conversations/catalog";
-import { viewCart } from "./conversations/viewCart";
-import { editShopName, editShopDescription } from "./conversations/shopSettings";
+import { productFeed } from "./conversations/feed";
 import { checkout } from "./conversations/checkout";
+import { viewCart } from "./conversations/viewCart";
+import { freeStorage } from "@grammyjs/storage-free";
+import { initialSessionData } from "./shared/session";
+import { initializeCategories } from "./database/seed";
+import { addProduct } from "./conversations/addProduct";
 import { viewMyOrders } from "./conversations/viewMyOrders";
+import { viewMyProducts } from "./conversations/viewProducts";
+import { MyContext, MyConversationContext } from "./types/bot";
+import { callbackQueryHandler } from "./handlers/callbackQuery";
 import { approveOrderConversation } from "./conversations/approveOrder";
+import { conversations, createConversation } from "@grammyjs/conversations";
+import {
+  Bot,
+  GrammyError,
+  HttpError,
+  InlineKeyboard,
+  NextFunction,
+  session,
+} from "grammy";
+import {
+  editShopName,
+  editShopDescription,
+} from "./conversations/shopSettings";
+import User from "./database/models/User";
+import { addCategoryConversation } from "./conversations/addCategory";
 
 dotenv.config({ path: "src/.env" });
 
@@ -106,6 +118,7 @@ bot.use(createConversation(editShopDescription));
 bot.use(createConversation(checkout));
 bot.use(createConversation(viewMyOrders));
 bot.use(createConversation(approveOrderConversation));
+bot.use(createConversation(addCategoryConversation));
 
 bot.on("callback_query:data", callbackQueryHandler);
 
@@ -121,16 +134,16 @@ bot.on("message:successful_payment", async (ctx) => {
     const Order = (await import("./database/models/Order")).default;
     const Product = (await import("./database/models/Product")).default;
     const cartService = (await import("./database/controllers/cart")).default;
-    
+
     const order = await Order.findOne({ orderNumber });
-    
+
     if (order) {
       await order.updateOne({
-        status: 'paid',
-        paymentStatus: 'succeeded',
+        status: "paid",
+        paymentStatus: "succeeded",
         paymentId: payment.telegram_payment_charge_id,
         paidAt: new Date(),
-        'buyerContact.phone': payment.order_info?.phone_number || ''
+        "buyerContact.phone": payment.order_info?.phone_number || "",
       });
 
       for (const item of order.items) {
@@ -142,43 +155,42 @@ bot.on("message:successful_payment", async (ctx) => {
               { new: true }
             );
           } catch (e) {
-            console.error(`Failed to decrease quantity for product ${item.productId}:`, e);
+            console.error(
+              `Failed to decrease quantity for product ${item.productId}:`,
+              e
+            );
           }
         }
       }
-
       await cartService.clearCart(ctx.from.id);
-
       await ctx.reply(
         "✅ <b>Оплата прошла успешно!</b>\n\n" +
-        `💳 Заказ: ${orderNumber}\n` +
-        `💰 Сумма: ${payment.total_amount / 100} ₽\n\n` +
-        "⏳ Заказ отправлен на модерацию администратору.\n" +
-        "📦 Отследить статус можно в '📋 Мои заказы'",
+          `💳 Заказ: ${orderNumber}\n` +
+          `💰 Сумма: ${payment.total_amount / 100} ₽\n\n` +
+          "⏳ Заказ отправлен на модерацию администратору.\n" +
+          "📦 Отследить статус можно в '📋 Мои заказы'",
         { parse_mode: "HTML" }
       );
 
-      const User = (await import("./database/models/User")).default;
-      const { InlineKeyboard } = await import("grammy");
-      
-      // Уведомляем продавцов о заказе (без выплат)
       for (const item of order.items) {
         if (item.sellerId) {
           try {
             const seller = await User.findById(item.sellerId);
             if (seller && seller.telegramId) {
-              const buyerUsername = ctx.from?.username ? `@${ctx.from.username}` : ctx.from?.first_name || 'Покупатель';
+              const buyerUsername = ctx.from?.username
+                ? `@${ctx.from.username}`
+                : ctx.from?.first_name || "Покупатель";
               const itemTotal = (item.price || 0) * (item.quantity || 0);
-              
+
               await ctx.api.sendMessage(
                 seller.telegramId,
                 "🔔 <b>Новый заказ!</b>\n\n" +
-                `💳 Заказ: ${orderNumber}\n` +
-                `📦 Товар: ${item.name}\n` +
-                `📊 Количество: ${item.quantity || 0} шт.\n` +
-                `💰 Сумма: ${itemTotal} ₽\n` +
-                `👤 Покупатель: ${buyerUsername}\n\n` +
-                "⏳ Ожидайте одобрения администратора для получения выплаты.",
+                  `💳 Заказ: ${orderNumber}\n` +
+                  `📦 Товар: ${item.name}\n` +
+                  `📊 Количество: ${item.quantity || 0} шт.\n` +
+                  `💰 Сумма: ${itemTotal} ₽\n` +
+                  `👤 Покупатель: ${buyerUsername}\n\n` +
+                  "⏳ Ожидайте одобрения администратора для получения выплаты.",
                 { parse_mode: "HTML" }
               );
             }
@@ -188,60 +200,64 @@ bot.on("message:successful_payment", async (ctx) => {
         }
       }
 
-      // Уведомляем администратора
       const adminId = process.env.ADMIN_ID;
       if (adminId) {
         try {
           const buyer = await User.findOne({ telegramId: ctx.from.id });
-          const buyerLink = ctx.from?.username 
-            ? `@${ctx.from.username}` 
-            : `<a href="tg://user?id=${ctx.from.id}">${ctx.from?.first_name || 'Покупатель'}</a>`;
-          
-          const buyerPhone = buyer?.phoneNumber || payment.order_info?.phone_number || 'не указан';
-          
+          const buyerLink = ctx.from?.username
+            ? `@${ctx.from.username}`
+            : `<a href="tg://user?id=${ctx.from.id}">${
+                ctx.from?.first_name || "Покупатель"
+              }</a>`;
+
+          const buyerPhone =
+            buyer?.phoneNumber ||
+            payment.order_info?.phone_number ||
+            "не указан";
+
           let message = "🔔 <b>НОВАЯ ПОКУПКА - ТРЕБУЕТСЯ ПРОВЕРКА</b>\n\n";
           message += `💳 Заказ: <code>${orderNumber}</code>\n`;
           message += `💰 Сумма: ${payment.total_amount / 100} ₽\n`;
-          message += `📅 Дата: ${new Date().toLocaleString('ru-RU')}\n\n`;
+          message += `📅 Дата: ${new Date().toLocaleString("ru-RU")}\n\n`;
           message += `👤 <b>Покупатель:</b>\n`;
           message += `├ Ссылка: ${buyerLink}\n`;
           message += `├ ID: <code>${ctx.from.id}</code>\n`;
           message += `└ Телефон: ${buyerPhone}\n\n`;
           message += `📦 <b>Товары:</b>\n`;
-          
+
           for (const item of order.items) {
             const seller = await User.findById(item.sellerId);
-            const sellerLink = seller?.username 
-              ? `@${seller.username}` 
-              : seller?.telegramId 
-                ? `<a href="tg://user?id=${seller.telegramId}">${seller.firstName || 'Продавец'}</a>`
-                : 'Неизвестен';
-            const sellerPhone = seller?.phoneNumber || 'не указан';
+            const sellerLink = seller?.username
+              ? `@${seller.username}`
+              : seller?.telegramId
+              ? `<a href="tg://user?id=${seller.telegramId}">${
+                  seller.firstName || "Продавец"
+                }</a>`
+              : "Неизвестен";
+            const sellerPhone = seller?.phoneNumber || "не указан";
             const itemTotal = (item.price || 0) * (item.quantity || 0);
             const sellerAmount = Math.round(itemTotal * 0.9);
-            
+
             message += `\n🏷️ ${item.name}\n`;
             message += `├ Количество: ${item.quantity || 0} шт.\n`;
             message += `├ Цена: ${item.price || 0} ₽\n`;
             message += `├ Сумма: ${itemTotal} ₽\n`;
             message += `├ <b>Продавец:</b> ${sellerLink}\n`;
-            message += `├ ID продавца: <code>${seller?.telegramId || 'N/A'}</code>\n`;
+            message += `├ ID продавца: <code>${
+              seller?.telegramId || "N/A"
+            }</code>\n`;
             message += `├ Телефон продавца: ${sellerPhone}\n`;
             message += `└ К выплате: ${sellerAmount} ₽ (90%)\n`;
           }
-          
+
           const keyboard = new InlineKeyboard()
             .text("✅ Одобрить сделку", `approve_order:${order._id}`)
             .text("❌ Отклонить", `reject_order:${order._id}`);
-          
-          await ctx.api.sendMessage(
-            Number(adminId),
-            message,
-            { 
-              parse_mode: "HTML",
-              reply_markup: keyboard
-            }
-          );
+
+          await ctx.api.sendMessage(Number(adminId), message, {
+            parse_mode: "HTML",
+            reply_markup: keyboard,
+          });
         } catch (e) {
           console.error("Failed to notify admin:", e);
         }

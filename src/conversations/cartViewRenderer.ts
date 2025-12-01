@@ -7,11 +7,8 @@ export async function buildCartPayload(telegramId: number) {
   if (!cart || cart.items.length === 0) {
     return { isEmpty: true, text: "🛒 Ваша корзина пуста" };
   }
-
-  // Collect product ids and batch fetch products to avoid N queries
   const ids = cart.items.map(it => {
     const prod = it.productId;
-    // Handle both populated (object with _id) and non-populated (ObjectId) cases
     if (prod && typeof prod === 'object' && prod._id) {
       return prod._id.toString();
     }
@@ -30,7 +27,6 @@ export async function buildCartPayload(telegramId: number) {
     let product: typeof products[0] | undefined;
     let pid: string | undefined;
 
-    // Handle populated vs non-populated productId
     if (prod && typeof prod === 'object' && '_id' in prod) {
       pid = (prod as unknown as { _id: { toString: () => string } })._id.toString();
       product = prodMap.get(pid) || (prod as unknown as typeof products[0]);
@@ -39,7 +35,6 @@ export async function buildCartPayload(telegramId: number) {
       product = prodMap.get(pid);
     }
 
-    // Skip if product not found or inactive
     if (!product || !product.name || !pid) {
       continue;
     }
@@ -52,7 +47,6 @@ export async function buildCartPayload(telegramId: number) {
     const name = product.name || 'Товар';
     lines.push(`• <b>${name}</b>\n  Цена: ${price} ₽ x ${qty} = ${subtotal} ₽`);
 
-    // Per-item inline buttons (one row)
     keyboard
       .text('➕', `cart_increase:${item._id}`)
       .text('➖', `cart_decrease:${item._id}`)
@@ -60,7 +54,6 @@ export async function buildCartPayload(telegramId: number) {
       .row();
   }
 
-  // Check if we have any valid items
   if (lines.length === 0) {
     return { isEmpty: true, text: "🛒 Ваша корзина пуста" };
   }

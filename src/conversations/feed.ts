@@ -1,13 +1,12 @@
 import Product from "../database/models/Product";
 import userService from "../database/controllers/user";
 import { InlineKeyboard } from "grammy";
-import { MyContext } from "../types/bot";
-import { Conversation } from "@grammyjs/conversations";
+import { MyConversation, MyConversationContext } from "../types/bot";
 import { getBuyerKeyboard } from "../shared/keyboards";
 
 export async function productFeed(
-  conversation: Conversation<MyContext, MyContext>,
-  ctx: MyContext
+  conversation: MyConversation,
+  ctx: MyConversationContext
 ) {
   const user = await userService.getUserById(ctx.from!.id);
   
@@ -15,19 +14,16 @@ export async function productFeed(
     await ctx.reply("❌ Эта функция доступна только покупателям");
     return;
   }
-  // Скрываем встроенную reply-клавиатуру, чтобы лента занимала весь экран
   try {
     await ctx.reply("📱 Открываю ленту...", { reply_markup: { remove_keyboard: true } });
   } catch (err) {
-    // Игнорируем ошибки отправки временного сообщения
   }
 
   let currentIndex = 0;
-  let currentMessageIds: number[] = []; // Массив ID всех сообщений текущего товара (медиагруппа + кнопки)
+  let currentMessageIds: number[] = [];
   let totalCount = 0;
-  let viewedProducts = new Set<string>(); // Для отслеживания уже просмотренных товаров
+  let viewedProducts = new Set<string>();
 
-  // Загружаем количество в фоне (не блокируем показ)
   Product.find({ 
     isActive: true,
     isApproved: true,
@@ -36,7 +32,6 @@ export async function productFeed(
   })
   .populate('sellerId', '_id')
   .then(products => {
-    // Фильтруем свои товары
     const filtered = products.filter(p => {
       const seller = p.sellerId as any;
       return seller && seller._id && seller._id.toString() !== user._id.toString();
@@ -47,9 +42,7 @@ export async function productFeed(
     totalCount = 0;
   });
 
-  // Функция для загрузки одного товара по индексу
   const loadProduct = async (index: number) => {
-    // Загружаем товары с запасом, чтобы отфильтровать свои
     const products = await Product.find({ 
       isActive: true,
       isApproved: true,
@@ -60,19 +53,16 @@ export async function productFeed(
     .populate('shopId', 'name')
     .populate('sellerId', '_id')
     .sort({ createdAt: -1 })
-    .limit(100); // Загружаем больше товаров для фильтрации
+    .limit(100);
 
-    // Фильтруем свои товары
     const filteredProducts = products.filter(p => {
       const seller = p.sellerId as any;
       return seller && seller._id && seller._id.toString() !== user._id.toString();
     });
 
-    // Возвращаем товар по индексу из отфильтрованного списка
     return filteredProducts[index] || null;
   };
 
-  // Функция для отображения товара
   const showProduct = async (index: number, deleteOldMessages: boolean = false, oldMessageIds: number[] = []): Promise<number[]> => {
     const product = await loadProduct(index);
     
@@ -81,17 +71,14 @@ export async function productFeed(
       return oldMessageIds;
     }
 
-    // Увеличиваем просмотр ТОЛЬКО если товар ещё не был просмотрен в этой сессии
     const productIdStr = product._id.toString();
     if (!viewedProducts.has(productIdStr)) {
-      viewedProducts.add(productIdStr); // Помечаем как просмотренный СРАЗУ
+      viewedProducts.add(productIdStr);
       try {
-        // Увеличиваем счетчик в БД напрямую через updateOne (атомарная операция)
         await Product.updateOne(
           { _id: product._id },
           { $inc: { viewsCount: 1 } }
         );
-        // Обновляем локальный объект для отображения
         product.viewsCount = (product.viewsCount || 0) + 1;
       } catch (err) {
         console.error("Ошибка увеличения счетчика просмотров:", err);
@@ -116,26 +103,21 @@ export async function productFeed(
 
     message += `\n\n<i>⬅️ Предыдущий товар | ➡️ Следующий товар</i>`;
 
-    // Создаём навигационные кнопки
     const keyboard = new InlineKeyboard();
 
-    // Кнопки навигации
     if (index > 0) {
       keyboard.text("⬅️", `feed_prev:${index}`);
     }
     
-    // Показываем счётчик (если totalCount ещё не загружен, показываем просто индекс)
     const counterText = totalCount > 0 ? `${index + 1}/${totalCount}` : `${index + 1}`;
     keyboard.text(counterText, `feed_noop`);
     
-    // Показываем кнопку вперёд всегда (если только не знаем точно, что это последний)
     if (totalCount === 0 || index < totalCount - 1) {
       keyboard.text("➡️", `feed_next:${index}`);
     }
 
     keyboard.row();
 
-    // Кнопки действий
     keyboard
       .text("🛒 В корзину", `add_to_cart:${product._id}`)
       .text("💳 Купить", `feed_buy_now:${product._id}`)
@@ -147,7 +129,6 @@ export async function productFeed(
 
     keyboard.text("↩️ Перейти в меню", `feed_exit`);
 
-    // Удаляем все старые сообщения если требуется
     if (deleteOldMessages && oldMessageIds.length > 0) {
       for (const msgId of oldMessageIds) {
         try {
@@ -158,19 +139,16 @@ export async function productFeed(
       }
     }
 
-    // Получаем медиафайлы товара
     const mediaItems = product.media && product.media.length > 0 ? product.media : [];
     
-    // Массив для хранения ID всех отправленных сообщений
     const newMessageIds: number[] = [];
 
     if (mediaItems.length > 1) {
-      // Если несколько медиа - отправляем медиагруппой
       try {
         const { InputMediaBuilder } = await import("grammy");
         const mediaGroup: Array<ReturnType<typeof InputMediaBuilder.photo | typeof InputMediaBuilder.video>> = [];
 
-        for (let i = 0; i < mediaItems.length && i < 10; i++) { // Telegram поддерживает до 10 медиа в группе
+        for (let i = 0; i < mediaItems.length && i < 10; i++) {
           const media = mediaItems[i];
           if (!media.fileId) continue;
 
@@ -189,17 +167,12 @@ export async function productFeed(
 
         if (mediaGroup.length > 0) {
           const sentMessages = await ctx.replyWithMediaGroup(mediaGroup);
-          // Сохраняем ID всех сообщений из медиагруппы
           sentMessages.forEach(msg => newMessageIds.push(msg.message_id));
-
-          // Отправляем кнопки отдельным сообщением после медиагруппы
           const buttonsMsg = await ctx.reply("👆 Управление товаром:", {
             reply_markup: keyboard
           });
-          // Добавляем ID сообщения с кнопками
           newMessageIds.push(buttonsMsg.message_id);
         } else {
-          // Fallback если не удалось создать медиагруппу
           const sentMsg = await ctx.reply(message, {
             parse_mode: "HTML",
             reply_markup: keyboard
@@ -208,7 +181,6 @@ export async function productFeed(
         }
       } catch (error) {
         console.error("Ошибка отправки медиагруппы:", error);
-        // Fallback - отправляем первое медиа
         const firstMedia = mediaItems[0];
         if (firstMedia.mediaType === 'video' && firstMedia.fileId) {
           const sentMsg = await ctx.replyWithVideo(firstMedia.fileId, {
@@ -233,7 +205,6 @@ export async function productFeed(
         }
       }
     } else if (mediaItems.length === 1) {
-      // Если одно медиа - отправляем с кнопками
       const firstMedia = mediaItems[0];
       
       try {
@@ -252,7 +223,6 @@ export async function productFeed(
           });
           newMessageIds.push(sentMsg.message_id);
         } else {
-          // Fallback на текст если fileId отсутствует
           const sentMsg = await ctx.reply(message, {
             parse_mode: "HTML",
             reply_markup: keyboard
@@ -391,7 +361,6 @@ export async function productFeed(
           continue;
         }
 
-        // Проверка минимальной суммы для оплаты
         const minAmount = 60;
         if (product.price < minAmount) {
           await ctx.reply(`❌ Минимальная сумма для оплаты: ${minAmount} ₽\nЦена товара: ${product.price} ₽`);

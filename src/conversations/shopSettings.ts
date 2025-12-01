@@ -1,12 +1,11 @@
-import { Conversation } from "@grammyjs/conversations";
-import { MyContext } from "../types/bot";
 import userService from "../database/controllers/user";
 import shopService from "../database/controllers/shop";
 import { getSellerKeyboard } from "../shared/keyboards";
+import { MyConversation, MyConversationContext } from "../types/bot";
 
 export async function editShopName(
-  conversation: Conversation<MyContext, MyContext>,
-  ctx: MyContext
+  conversation: MyConversation,
+  ctx: MyConversationContext
 ) {
   if (!ctx.from) return;
 
@@ -16,14 +15,16 @@ export async function editShopName(
     return;
   }
 
-  const shop = user.profiles.seller.shopId as unknown as { _id: { toString: () => string }; name: string };
+  const shop = user.profiles.seller.shopId as unknown as {
+    _id: { toString: () => string };
+    name: string;
+  };
 
-  // Повторяем пока не введут корректное название
   let newName: string;
   while (true) {
     await ctx.reply(
       `Текущее название магазина: <b>${shop.name}</b>\n\n` +
-      `📝 Введите новое название магазина:`,
+        `📝 Введите новое название магазина:`,
       { parse_mode: "HTML" }
     );
 
@@ -37,34 +38,36 @@ export async function editShopName(
     newName = nameCtx.message.text.trim();
 
     if (newName.length < 3) {
-      await ctx.reply("❌ Название должно содержать минимум 3 символа. Попробуйте ещё раз.");
+      await ctx.reply(
+        "❌ Название должно содержать минимум 3 символа. Попробуйте ещё раз."
+      );
       continue;
     }
 
     if (newName.length > 50) {
-      await ctx.reply("❌ Название не должно превышать 50 символов. Попробуйте ещё раз.");
+      await ctx.reply(
+        "❌ Название не должно превышать 50 символов. Попробуйте ещё раз."
+      );
       continue;
     }
 
     break;
   }
 
-  // Отправляем на модерацию
   await shopService.submitNameChange(shop._id.toString(), newName);
 
   const keyboard = getSellerKeyboard(user.profiles.buyer.isActive);
 
   await ctx.reply(
     `✅ Запрос на изменение названия отправлен на модерацию!\n\n` +
-    `Новое название: <b>${newName}</b>\n\n` +
-    `После одобрения администратором название будет изменено.`,
-    { 
+      `Новое название: <b>${newName}</b>\n\n` +
+      `После одобрения администратором название будет изменено.`,
+    {
       parse_mode: "HTML",
-      reply_markup: keyboard
+      reply_markup: keyboard,
     }
   );
 
-  // Уведомляем админа
   if (process.env.ADMIN_ID) {
     try {
       const { InlineKeyboard } = await import("grammy");
@@ -92,8 +95,8 @@ export async function editShopName(
 }
 
 export async function editShopDescription(
-  conversation: Conversation<MyContext, MyContext>,
-  ctx: MyContext
+  conversation: MyConversation,
+  ctx: MyConversationContext
 ) {
   if (!ctx.from) return;
 
@@ -103,14 +106,17 @@ export async function editShopDescription(
     return;
   }
 
-  const shop = user.profiles.seller.shopId as unknown as { _id: { toString: () => string }; name: string; description: string };
+  const shop = user.profiles.seller.shopId as unknown as {
+    _id: { toString: () => string };
+    name: string;
+    description: string;
+  };
 
-  // Повторяем пока не введут корректное описание
   let newDescription: string;
   while (true) {
     await ctx.reply(
       `Текущее описание магазина:\n<i>${shop.description}</i>\n\n` +
-      `📝 Введите новое описание магазина:`,
+        `📝 Введите новое описание магазина:`,
       { parse_mode: "HTML" }
     );
 
@@ -124,34 +130,39 @@ export async function editShopDescription(
     newDescription = descCtx.message.text.trim();
 
     if (newDescription.length < 10) {
-      await ctx.reply("❌ Описание должно содержать минимум 10 символов. Попробуйте ещё раз.");
+      await ctx.reply(
+        "❌ Описание должно содержать минимум 10 символов. Попробуйте ещё раз."
+      );
       continue;
     }
 
     if (newDescription.length > 500) {
-      await ctx.reply("❌ Описание не должно превышать 500 символов. Попробуйте ещё раз.");
+      await ctx.reply(
+        "❌ Описание не должно превышать 500 символов. Попробуйте ещё раз."
+      );
       continue;
     }
 
     break;
   }
 
-  // Отправляем на модерацию
-  await shopService.submitDescriptionChange(shop._id.toString(), newDescription);
+  await shopService.submitDescriptionChange(
+    shop._id.toString(),
+    newDescription
+  );
 
   const keyboard = getSellerKeyboard(user.profiles.buyer.isActive);
 
   await ctx.reply(
     `✅ Запрос на изменение описания отправлен на модерацию!\n\n` +
-    `Новое описание:\n<i>${newDescription}</i>\n\n` +
-    `После одобрения администратором описание будет изменено.`,
-    { 
+      `Новое описание:\n<i>${newDescription}</i>\n\n` +
+      `После одобрения администратором описание будет изменено.`,
+    {
       parse_mode: "HTML",
-      reply_markup: keyboard
+      reply_markup: keyboard,
     }
   );
 
-  // Уведомляем админа
   if (process.env.ADMIN_ID) {
     try {
       const { InlineKeyboard } = await import("grammy");

@@ -1,13 +1,12 @@
-import { Conversation } from "@grammyjs/conversations";
-import { MyContext } from "../types/bot";
-import { InlineKeyboard } from "grammy";
 import Order from "../database/models/Order";
 import userService from "../database/controllers/user";
+import { InlineKeyboard } from "grammy";
 import { getBuyerKeyboard } from "../shared/keyboards";
+import { MyConversationContext, MyConversation } from "../types/bot";
 
 export async function viewMyOrders(
-  conversation: Conversation<MyContext, MyContext>,
-  ctx: MyContext
+  conversation: MyConversation,
+  ctx: MyConversationContext
 ) {
   const userId = ctx.from!.id;
   const user = await userService.getUserById(userId);

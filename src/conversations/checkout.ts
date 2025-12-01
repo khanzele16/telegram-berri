@@ -1,15 +1,14 @@
 import dotenv from "dotenv";
 import Order from "../database/models/Order";
 import cartService from "../database/controllers/cart";
-import { MyContext } from "../types/bot";
-import { Conversation } from "@grammyjs/conversations";
 import { getBuyerKeyboard } from "../shared/keyboards";
+import { MyContext, MyConversation, MyConversationContext } from "../types/bot";
 
 dotenv.config({ path: "src/.env" })
 
 export async function checkout(
-  conversation: Conversation<MyContext, MyContext>,
-  ctx: MyContext
+  conversation: MyConversation,
+  ctx: MyConversationContext
 ) {
   const userId = ctx.from!.id;
   
@@ -25,8 +24,7 @@ export async function checkout(
   const totalAmount = cart.items.reduce((sum: number, item: any) => 
     sum + (item.productId.price * item.quantity), 0);
 
-  // Проверка минимальной суммы для оплаты
-  const minAmount = 60; // минимум 60₽ для Telegram Payments
+  const minAmount = 60;
   if (totalAmount < minAmount) {
     await ctx.reply(
       `❌ Минимальная сумма для оплаты: ${minAmount} ₽\n` +

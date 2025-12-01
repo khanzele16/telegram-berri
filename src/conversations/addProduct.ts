@@ -1,17 +1,15 @@
-import { Conversation } from "@grammyjs/conversations";
-import { InlineKeyboard, Keyboard } from "grammy";
-import { MyContext } from "../types/bot";
-import userService from "../database/controllers/user";
-import shopService from "../database/controllers/shop";
 import Product from "../database/models/Product";
 import Category from "../database/models/Category";
+import userService from "../database/controllers/user";
+import shopService from "../database/controllers/shop";
+import { InlineKeyboard, Keyboard } from "grammy";
 import { getSellerKeyboard } from "../shared/keyboards";
+import { MyConversation, MyConversationContext } from "../types/bot";
 
 export async function addProduct(
-  conversation: Conversation<MyContext, MyContext>,
-  ctx: MyContext
+  conversation: MyConversation,
+  ctx: MyConversationContext
 ) {
-  // Проверяем, что пользователь - продавец
   const user = await userService.getUserById(ctx.from!.id);
   
   if (!user?.profiles.seller.isActive || !user.profiles.seller.shopId) {
@@ -19,7 +17,6 @@ export async function addProduct(
     return;
   }
 
-  // Проверяем, что магазин одобрен
   const shop = await shopService.getShopById(user.profiles.seller.shopId.toString());
   
   if (!shop?.isApproved) {
@@ -31,26 +28,21 @@ export async function addProduct(
     return;
   }
 
-  // Собираем медиа файлы
   const mediaFiles: Array<{ fileId: string; mediaType: 'photo' | 'video' }> = [];
   const MAX_MEDIA = 6;
 
-  // Цикл для сбора медиа с поддержкой автоматического перезапуска шага при ошибке
   while (true) {
-    // Инструкция в начале шага (при первом проходе или после перезапуска)
     await ctx.reply(
       "<b>Шаг 1/7:</b> Отправьте фото или видео товара\n\n" +
       `📸 Можно отправить до ${MAX_MEDIA} фото/видео. Когда закончите, нажмите '✅ Готово'`,
       { parse_mode: 'HTML', reply_markup: new Keyboard().text('✅ Готово').row().text('❌ Отмена').resized() }
     );
 
-    mediaFiles.length = 0; // очищаем на всякий случай при перезапуске
+    mediaFiles.length = 0;
 
-    // Собираем медиа пока не нажмут 'Готово' или не будет отмена
     while (true) {
       const mediaCtx = await conversation.wait();
 
-      // Проверка на отмену
       if (mediaCtx.message?.text === "❌ Отмена") {
         await ctx.reply("❌ Добавление товара отменено", {
           reply_markup: getSellerKeyboard(user.profiles.buyer.isActive)
@@ -58,7 +50,6 @@ export async function addProduct(
         return;
       }
 
-      // Проверка на завершение
       if (mediaCtx.message?.text === "✅ Готово") {
         if (mediaFiles.length === 0) {
           await ctx.reply(
@@ -70,23 +61,18 @@ export async function addProduct(
         break;
       }
 
-      // Рассматриваем попытку добавить файл
-      // Определяем количество файлов в текущем входящем сообщении (обычно 1)
       let incomingCount = 0;
       if (mediaCtx.message?.photo) incomingCount = 1;
       if (mediaCtx.message?.video) incomingCount = 1;
 
-      // Если добавление приведёт к превышению лимита — сообщаем и перезапускаем шаг
       if (incomingCount > 0 && mediaFiles.length + incomingCount > MAX_MEDIA) {
         await ctx.reply(
           `⚠️ Превышен лимит медиа (максимум ${MAX_MEDIA}).\n` +
           `Начинаем шаг заново — пожалуйста, отправьте до ${MAX_MEDIA} фото/видео.`
         );
-        // Принудительный перезапуск внешнего цикла — начнём сбор заново
-        break; // выйдем во внешний цикл, где mediaFiles будет очищен и шаг повторится
+        break;
       }
 
-      // Обработка фото
       if (mediaCtx.message?.photo && mediaCtx.message.photo.length > 0) {
         const photo = mediaCtx.message.photo[mediaCtx.message.photo.length - 1];
         mediaFiles.push({ fileId: photo.file_id, mediaType: 'photo' });
@@ -97,7 +83,6 @@ export async function addProduct(
         continue;
       }
 
-      // Обработка видео
       if (mediaCtx.message?.video) {
         const video = mediaCtx.message.video;
         mediaFiles.push({ fileId: video.file_id, mediaType: 'video' });
@@ -108,20 +93,16 @@ export async function addProduct(
         continue;
       }
 
-      // Если отправлено что-то другое
       if (mediaCtx.message?.text && mediaCtx.message?.text !== "✅ Готово" && mediaCtx.message?.text !== "❌ Отмена") {
         await ctx.reply("⚠️ Пожалуйста, отправьте фото или видео, либо нажмите '✅ Готово' для продолжения");
       }
     }
 
-    // Если мы дошли сюда и mediaFiles заполнены и не превышают лимит — продолжаем дальше
     if (mediaFiles.length > 0 && mediaFiles.length <= MAX_MEDIA) {
-      break; // выходим из внешнего цикла — шаг успешно завершён
+      break;
     }
-    // Иначе внешний цикл повторится (перезапуск шага)
   }
 
-  // Подсчитываем типы медиа
   const photoCount = mediaFiles.filter(m => m.mediaType === 'photo').length;
   const videoCount = mediaFiles.filter(m => m.mediaType === 'video').length;
   
@@ -129,7 +110,6 @@ export async function addProduct(
   if (photoCount > 0) mediaStats += `📸 Фото: ${photoCount}\n`;
   if (videoCount > 0) mediaStats += `🎥 Видео: ${videoCount}\n`;
 
-  // Шаг 2: название — повторяем пока не введут корректный текст или не отменят
   let name: string;
   while (true) {
     await ctx.reply(mediaStats + "\n<b>Шаг 2/7:</b> Введите название товара:", {
@@ -160,7 +140,6 @@ export async function addProduct(
     break;
   }
 
-  // Шаг 3: описание — повторяем пока не введут корректный текст или не отменят
   let description: string;
   while (true) {
     await ctx.reply(`<b>✅ Название:</b> ${name}\n\n<b>Шаг 3/7:</b> Введите описание товара:`, { parse_mode: "HTML" });
@@ -187,7 +166,6 @@ export async function addProduct(
     break;
   }
 
-  // Шаг 4: цена — повторяем пока не введут корректную цену
   let price: number;
   while (true) {
     await ctx.reply(`<b>✅ Описание:</b> ${description}\n\n<b>Шаг 4/7:</b> Введите цену товара (в рублях):`, { parse_mode: "HTML" });
@@ -219,7 +197,6 @@ export async function addProduct(
     break;
   }
 
-  // Шаг 5: количество — повторяем пока не введут корректное число
   let quantity: number;
   while (true) {
     await ctx.reply(`<b>✅ Цена:</b> ${price} ₽\n\n<b>Шаг 5/7:</b> Введите количество товара на складе:`, { parse_mode: "HTML" });
@@ -251,7 +228,6 @@ export async function addProduct(
     break;
   }
 
-  // Получаем категории
   const categories = await Category.find({ isActive: true }).sort({ order: 1 });
 
   if (categories.length === 0) {
@@ -279,7 +255,6 @@ export async function addProduct(
     }
   );
 
-  // Ожидаем выбор категории (повторяем пока не выберут корректно)
   let selectedCategory;
   while (true) {
     const categoryCtx = await conversation.waitFor("callback_query:data");
@@ -303,7 +278,6 @@ export async function addProduct(
     break;
   }
 
-  // Предлагаем добавить геолокацию
   const locationKeyboard = new Keyboard()
     .requestLocation("📍 Отправить геолокацию")
     .row()
@@ -337,12 +311,8 @@ export async function addProduct(
       latitude: locationCtx.message.location.latitude,
       longitude: locationCtx.message.location.longitude
     };
-    
-    // Попробуем получить адрес через геокодинг (можно добавить позже)
-    // location.address = await getAddressFromCoordinates(location.latitude, location.longitude);
   }
 
-  // Создаём товар со статусом "не одобрен" - отправляем на модерацию
   try {
     const product = await Product.create({
       shopId: shop._id,
@@ -353,21 +323,18 @@ export async function addProduct(
       price: price,
       quantity: quantity,
       media: mediaFiles,
-      images: mediaFiles.filter(m => m.mediaType === 'photo').map(m => ({ fileId: m.fileId })), // для обратной совместимости
+      images: mediaFiles.filter(m => m.mediaType === 'photo').map(m => ({ fileId: m.fileId })),
       location: location,
       status: quantity > 0 ? 'available' : 'out_of_stock',
-      isApproved: false, // Товар требует модерации
-      isActive: false // Скрыт до одобрения
+      isApproved: false,
+      isActive: false
     });
 
-    // Обновляем счётчик товаров в магазине
     await shopService.incrementProductsCount(shop._id.toString());
 
-    // Подсчитываем медиа
     const photoCount = mediaFiles.filter(m => m.mediaType === 'photo').length;
     const videoCount = mediaFiles.filter(m => m.mediaType === 'video').length;
 
-    // Формируем сообщение с подтверждением
     let confirmMessage = 
       "<b>✅ Товар успешно создан!</b>\n\n" +
       `<b>📦 Название:</b> ${name}\n` +
@@ -387,7 +354,6 @@ export async function addProduct(
 
     confirmMessage += `\n<b>🆔 ID товара:</b> ${product._id}`;
 
-    // Отправляем уведомление админу о новом товаре
     if (process.env.ADMIN_ID) {
       try {
         const moderationKeyboard = new InlineKeyboard()
@@ -411,7 +377,6 @@ export async function addProduct(
         
         adminMessage += `\n🆔 ID товара: ${product._id}`;
 
-        // Отправляем первое медиа админу
         if (mediaFiles.length > 0) {
           const firstMedia = mediaFiles[0];
           if (firstMedia.mediaType === 'photo') {
@@ -437,7 +402,6 @@ export async function addProduct(
       }
     }
 
-    // Отправляем первое медиа с описанием продавцу
     if (mediaFiles.length > 0) {
       const firstMedia = mediaFiles[0];
       if (firstMedia.mediaType === 'photo') {

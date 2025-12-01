@@ -31,7 +31,6 @@ class CartService {
     const user = await userService.getUserById(telegramId);
     if (!user) return null;
 
-    // Проверяем доступное количество товара
     const product = await Product.findById(productId);
     if (!product) throw new Error('Товар не найден');
     if (product.quantity < quantity) {
@@ -74,7 +73,6 @@ class CartService {
 
     const newQuantity = (item.quantity || 0) + delta;
     
-    // При увеличении количества проверяем доступность
     if (delta > 0) {
       const product = await Product.findById(item.productId);
       if (!product) throw new Error('Товар не найден');

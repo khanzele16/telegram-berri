@@ -1,13 +1,11 @@
-import { InlineKeyboard } from "grammy";
-import { MyContext } from "../types/bot";
-import { Conversation } from "@grammyjs/conversations";
-import orderController from "../database/controllers/order";
 import User from "../database/models/User";
 import Order from "../database/models/Order";
+import orderController from "../database/controllers/order";
+import { MyContext, MyConversation, MyConversationContext } from "../types/bot";
 
 export async function approveOrderConversation(
-  conversation: Conversation<MyContext, MyContext>,
-  ctx: MyContext
+  conversation: MyConversation,
+  ctx: MyConversationContext
 ) {
   if (!ctx.callbackQuery?.data) {
     await ctx.reply("❌ Некорректный запрос");
@@ -64,7 +62,6 @@ export async function approveOrderConversation(
           }
         }
         
-        // Уведомляем продавцов
         for (const item of result.order.items) {
           try {
             const seller = await User.findById(item.sellerId);
@@ -147,7 +144,6 @@ export async function approveOrderConversation(
           }
         }
         
-        // Уведомляем продавцов
         for (const item of result.order.items) {
           try {
             const seller = await User.findById(item.sellerId);

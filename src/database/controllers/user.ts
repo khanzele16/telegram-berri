@@ -18,7 +18,6 @@ class UserService {
       });
       await user.save();
     } else {
-      // Обновляем username если изменился
       if (userData.username && user.username !== userData.username) {
         user.username = userData.username;
         await user.save();

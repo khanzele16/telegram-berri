@@ -92,7 +92,6 @@ class ShopService {
     );
   }
 
-  // Модерация изменений
   async submitNameChange(shopId: string, newName: string) {
     return await Shop.findByIdAndUpdate(
       shopId,

@@ -5,85 +5,77 @@ const Shop = new Schema(
     ownerId: {
       type: Number,
       required: true,
-      index: true
+      index: true,
     },
     name: {
       type: String,
       required: true,
-      trim: true
+      trim: true,
     },
     description: {
       type: String,
-      required: true
+      required: true,
     },
     logo: {
       fileId: String,
-      type: { type: String, default: 'photo' }
+      type: { type: String, default: "photo" },
     },
     paymentDetails: String,
     cardNumber: {
       type: String,
-      required: false
+      required: false,
     },
-    
-    // Статистика
     productsCount: {
       type: Number,
-      default: 0
+      default: 0,
     },
     salesCount: {
       type: Number,
-      default: 0
+      default: 0,
     },
     totalRevenue: {
       type: Number,
-      default: 0
+      default: 0,
     },
     rating: {
       type: Number,
       default: 0,
       min: 0,
-      max: 5
+      max: 5,
     },
     reviewsCount: {
       type: Number,
-      default: 0
+      default: 0,
     },
-    
-    // Модерация
     isApproved: {
       type: Boolean,
-      default: false
+      default: false,
     },
     isActive: {
       type: Boolean,
-      default: true
+      default: true,
     },
-    
-    // Изменения ожидающие модерации
     pendingName: {
       type: String,
       required: false,
-      default: null
+      default: null,
     },
     pendingDescription: {
       type: String,
       required: false,
-      default: null
+      default: null,
     },
-    
-    // Дополнительно
-    categories: [{
-      type: Schema.Types.ObjectId,
-      ref: "Category"
-    }]
+    categories: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Category",
+      },
+    ],
   },
   {
-    timestamps: true
+    timestamps: true,
   }
 );
-
-// Индекс для поиска
-Shop.index({ name: 'text', description: 'text' });
+Shop.index({ name: "text", description: "text" });
 
 export default model("Shop", Shop);
